@@ -51,3 +51,8 @@ PyTorch 0.4.0 & python 3.6 & Librosa
 --temp TEMPERATURE / z ~ N(0, 1 * TEMPERATURE).
 
 `python synthesize_student.py --model_name wavenet_gaussian_student --load_step 10000 --teacher_name wavenet_gaussian --teacher_load_step 10000 --batch_size 4 --num_blocks_t 4 --num_layers_t 6 --num_layers_s 6 --KL_type qp --num_blocks_t 4 --num_layers_t 6 --num_layers_s 6 --num_samples 5 --temp 0.7`
+
+# References
+
+WaveNet vocoder : [https://github.com/r9y9/wavenet_vocoder](https://github.com/r9y9/wavenet_vocoder)
+ClariNet : [https://arxiv.org/abs/1807.07281](https://arxiv.org/abs/1807.07281)
