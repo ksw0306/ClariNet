@@ -55,4 +55,5 @@ PyTorch 0.4.0 & python 3.6 & Librosa
 # References
 
 WaveNet vocoder : [https://github.com/r9y9/wavenet_vocoder](https://github.com/r9y9/wavenet_vocoder)
+
 ClariNet : [https://arxiv.org/abs/1807.07281](https://arxiv.org/abs/1807.07281)
