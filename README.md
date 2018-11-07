@@ -1,5 +1,4 @@
-# ClariNet: Parallel Wave Generation in End-to-End Text-to-Speech
-
+# ClariNet
 A Pytorch Implementation of ClariNet (Mel Spectrogram --> Waveform)
 
 
