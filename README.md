@@ -52,6 +52,8 @@ This step should be followed by Step 5 to load the pre-trained teacher & student
 
 --teacher_load_step CHECKPOINT # of Pre-trained teacher model
 
---KL_type qp (Reversed KL divegence KL(q||p))    or --KL_type pq (Forward KL divergence KL(p||q)
+--KL_type qp (Reversed KL divegence KL(q||p))  or --KL_type pq (Forward KL divergence KL(p||q)
 
-`python synthesize_student.py --model_name wavenet_gaussian_student --load_step 10000 --teacher_name wavenet_gaussian --teacher_load_step 10000 --batch_size 4 --num_blocks_t 4 --num_layers_t 6 --num_layers_s 6 --KL_type qp --num_blocks_t 4 --num_layers_t 6 --num_layers_s 6 --num_samples 5`
+--temp TEMPERATURE / z ~ N(0, 1 * TEMPERATURE).
+
+`python synthesize_student.py --model_name wavenet_gaussian_student --load_step 10000 --teacher_name wavenet_gaussian --teacher_load_step 10000 --batch_size 4 --num_blocks_t 4 --num_layers_t 6 --num_layers_s 6 --KL_type qp --num_blocks_t 4 --num_layers_t 6 --num_layers_s 6 --num_samples 5 --temp 0.7`
