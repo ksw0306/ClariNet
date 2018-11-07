@@ -22,15 +22,11 @@ PyTorch 0.4.0 & python 3.6 & Librosa
 
 #### Step 4. Synthesize (Teacher)
 
-This step should be followed by Step 3 to load the pre-trained model.
-
 --load_step CHECKPOINT # of Pre-trained teacher model
 
 `python synthesize.py --model_name wavenet_gaussian --num_blocks 4 --num_layers 6 --load_step 10000`
 
 #### Step 5. Train Gaussian Inverse Autoregressive Flow (Student)
-
-This step should be followed by Step 3 to load the pre-trained model.
 
 --teacher_name YOUR TEACHER MODEL'S NAME
 
@@ -41,8 +37,6 @@ This step should be followed by Step 3 to load the pre-trained model.
 `python train_student.py --model_name wavenet_gaussian_student --teacher_name wavenet_gaussian --teacher_load_step 10000 --batch_size 4 --num_blocks_t 4 --num_layers_t 6 --num_layers_s 6 --KL_type qp`
 
 #### Step 6. Synthesize (Student)
-
-This step should be followed by Step 5 to load the pre-trained teacher & student models.
 
 --model_name YOUR STUDENT MODEL'S NAME
 
