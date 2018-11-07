@@ -29,7 +29,7 @@ parser.add_argument('--log', type=str, default='./log', help='Log folder.')
 parser.add_argument('--teacher_name', type=str, default='wavenet_gaussian_01', help='Model Name')
 parser.add_argument('--model_name', type=str, default='wavenet_student_gaussian_01', help='Model Name')
 parser.add_argument('--teacher_load_step', type=int, default=0, help='Teacher Load Step')
-parser.add_argument('--student_load_step', type=int, default=0, help='Student Load Step')
+parser.add_argument('--load_step', type=int, default=0, help='Student Load Step')
 
 parser.add_argument('--KL_type', type=str, default='qp', help='KL_pq vs KL_qp')
 parser.add_argument('--epochs', '-e', type=int, default=1000, help='Number of epochs to train.')
@@ -335,7 +335,7 @@ for name, param in model_t.named_parameters():
         param.requires_grad = False
 
 global_step, global_epoch = 0, 0
-load_step = 0
+load_step = args.load_step
 
 log = open(os.path.join(args.log, '{}.txt'.format(args.model_name)), 'w')
 state = {k: v for k, v in args._get_kwargs()}
