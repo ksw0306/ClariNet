@@ -30,7 +30,7 @@ PyTorch 0.4.0 & python 3.6 & Librosa
 
 `--teacher_name YOUR TEACHER MODEL'S NAME`
 
-`--teacher_load_step CHECKPOINT` : : the # of the pre-trained *teacher* model's global training step (also depicted in the trained weight file)
+`--teacher_load_step CHECKPOINT` : the # of the pre-trained *teacher* model's global training step (also depicted in the trained weight file)
 
 `--KL_type qp` : Reversed KL divegence KL(q||p)  or `--KL_type pq` : Forward KL divergence KL(p||q)
 
@@ -40,7 +40,7 @@ PyTorch 0.4.0 & python 3.6 & Librosa
 
 `--model_name YOUR STUDENT MODEL'S NAME`
 
-`--load_step CHECKPOINT` : : the # of the pre-trained *student* model's global training step (also depicted in the trained weight file)
+`--load_step CHECKPOINT` : the # of the pre-trained *student* model's global training step (also depicted in the trained weight file)
 
 `--teacher_name YOUR TEACHER MODEL'S NAME`
 
