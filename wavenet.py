@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from modules import Conv, ResBlock
 from loss import sample_from_gaussian
+import time
 
 
 class Wavenet(nn.Module):
@@ -56,26 +57,48 @@ class Wavenet(nn.Module):
         return out
 
     def generate(self, num_samples, c=None):
-        # Only a waveform generation
-        x = torch.zeros(1, 1, num_samples + 1)
-        c = self.upsample(c)
+        rf_size = self.receptive_field_size()
+
+        x_rf = torch.zeros(1, 1, rf_size).to(torch.device('cuda'))
+        x = torch.zeros(1, 1, num_samples + 1).to(torch.device('cuda'))
+
+        c_upsampled = self.upsample(c)
+        local_cond = c_upsampled
+
+        timer = time.perf_counter()
+        torch.cuda.synchronize()
         for i in range(num_samples):
-            if i % 100 == 0:
-                print(i)
-            if i >= self.receptive_field_size():
-                start_idx = i - self.receptive_field_size() + 1
+            if i % 1000 == 0:
+                torch.cuda.synchronize()
+                timer_end = time.perf_counter()
+                print("generating {}-th sample: {:.4f} samples per second..".format(i, 1000/(timer_end - timer)))
+                timer = time.perf_counter()
+            if i >= rf_size:
+                start_idx = i - rf_size + 1
             else:
                 start_idx = 0
-            x_in = x[:, :, start_idx:i+1].to(torch.device("cuda"))
-            if c is not None:
-                cond = c[:, :, start_idx:i + 1]
+
+            if local_cond is not None:
+                cond_c = local_cond[:, :, start_idx:i + 1]
             else:
-                cond = None
-            out = self.wavenet(x_in, cond)
-            # sampling input
-            x[:, :, i + 1] = sample_from_gaussian(out[:, :, -1:]).to(torch.device("cpu"))
-            del out, x_in, cond
-        return x[:, :, 1:]
+                cond_c = None
+            
+            i_rf = min(i, rf_size)
+
+            x_in = x_rf[:, :, -(i_rf+1):]
+
+            out = self.wavenet(x_in, cond_c)
+
+            x[:, :, i + 1] = sample_from_gaussian(out[:, :, -1:])
+            x_rf = self.roll_dim2_and_zerofill_last(x_rf, -1)
+            x_rf[:, :, -1] = x[:, :, i + 1]
+
+        return x[:, :, 1:].cpu()
+
+    def roll_dim2_and_zerofill_last(self, x, n):
+        x_left, x_right = x[:, :, :-n], x[:, :, -n:]
+        x_left.zero_()
+        return torch.cat((x_right, x_left), dim=2)
 
     def upsample(self, c):
         if self.upsample_conv is not None:

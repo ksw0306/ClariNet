@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.distributions.normal import Normal
 from data import LJspeechDataset, collate_fn, collate_fn_synthesize
-from modules import ExponentialMovingAverage, KL_Loss, STFT
+from modules import ExponentialMovingAverage, KL_Loss, stft
 from wavenet import Wavenet
 from wavenet_iaf import Wavenet_Student
 import numpy as np
@@ -27,24 +27,25 @@ parser.add_argument('--loss', type=str, default='./loss', help='Folder to save l
 parser.add_argument('--log', type=str, default='./log', help='Log folder.')
 
 parser.add_argument('--teacher_name', type=str, default='wavenet_gaussian_01', help='Model Name')
-parser.add_argument('--model_name', type=str, default='wavenet_student_gaussian_01', help='Model Name')
+parser.add_argument('--model_name', type=str, default='clarinet_01', help='Model Name')
 parser.add_argument('--teacher_load_step', type=int, default=0, help='Teacher Load Step')
 parser.add_argument('--load_step', type=int, default=0, help='Student Load Step')
 
 parser.add_argument('--KL_type', type=str, default='qp', help='KL_pq vs KL_qp')
 parser.add_argument('--epochs', '-e', type=int, default=1000, help='Number of epochs to train.')
-parser.add_argument('--batch_size', '-b', type=int, default=4, help='Batch size.')
+parser.add_argument('--batch_size', '-b', type=int, default=8, help='Batch size.')
 parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3, help='The Learning Rate.')
 parser.add_argument('--ema_decay', type=float, default=0.9999, help='Exponential Moving Average Decay')
-parser.add_argument('--num_blocks_t', type=int, default=4, help='Number of blocks (Teacher)')
-parser.add_argument('--num_layers_t', type=int, default=6, help='Number of layers (Teacher)')
-parser.add_argument('--num_layers_s', type=int, default=6, help='Number of layers (Student)')
+parser.add_argument('--num_blocks_t', type=int, default=2, help='Number of blocks (Teacher)')
+parser.add_argument('--num_layers_t', type=int, default=10, help='Number of layers (Teacher)')
+parser.add_argument('--num_layers_s', type=int, default=10, help='Number of layers (Student)')
 parser.add_argument('--residual_channels', type=int, default=128, help='Residual Channels')
 parser.add_argument('--gate_channels', type=int, default=256, help='Gate Channels')
 parser.add_argument('--skip_channels', type=int, default=128, help='Skip Channels')
-parser.add_argument('--kernel_size', type=int, default=3, help='Kernel Size')
+parser.add_argument('--kernel_size', type=int, default=2, help='Kernel Size')
 parser.add_argument('--cin_channels', type=int, default=80, help='Cin Channels')
 parser.add_argument('--num_workers', type=int, default=3, help='Number of workers')
+parser.add_argument('--num_gpu', type=int, default=1, help='Number of GPUs to use. >1 uses DataParallel')
 
 args = parser.parse_args()
 
@@ -95,7 +96,7 @@ def build_model():
 
 
 def build_student():
-    model_s = Wavenet_Student(num_blocks_student=[1, 1, 1, 4],
+    model_s = Wavenet_Student(num_blocks_student=[1, 1, 1, 1, 1, 1],
                               num_layers=args.num_layers_s)
     return model_s
 
@@ -104,6 +105,8 @@ def clone_as_averaged_model(model_s, ema):
     assert ema is not None
     averaged_model = build_student()
     averaged_model.to(device)
+    if args.num_gpu > 1:
+        averaged_model = torch.nn.DataParallel(averaged_model)
     averaged_model.load_state_dict(model_s.state_dict())
     for name, param in averaged_model.named_parameters():
         if name in ema.shadow:
@@ -150,14 +153,13 @@ def train(epoch, model_t, model_s, optimizer, ema):
         elif args.KL_type == 'qp':
             loss_t, loss_KL, loss_reg = criterion_t(mu_s, logs_s, mu_logs_t[:, 0:1, :-1], mu_logs_t[:, 1:, :-1])
 
-        stft_student, _ = stft(x_student[:, :, 1:])
-        stft_truth, _ = stft(x[:, :, 1:])
-
+        stft_student = stft(x_student[:, 0, 1:], scale='linear')
+        stft_truth = stft(x[:, 0, 1:], scale='linear')
         loss_frame = criterion_frame(stft_student, stft_truth)
         loss_tot = loss_t + loss_frame
         loss_tot.backward()
 
-        nn.utils.clip_grad_norm_(model_s.parameters(), 10)
+        nn.utils.clip_grad_norm_(model_s.parameters(), 10.)
         optimizer.step()
         if ema is not None:
             for name, param in model_s.named_parameters():
@@ -207,8 +209,8 @@ def evaluate(model_t, model_s, ema=None):
         elif args.KL_type == 'qp':
             loss_t, loss_KL, loss_reg = criterion_t(mu_s, logs_s, mu_logs_t[:, 0:1, :-1], mu_logs_t[:, 1:, :-1])
 
-        stft_student, _ = stft(x_student[:, :, 1:])
-        stft_truth, _ = stft(x[:, :, 1:])
+        stft_student = stft(x_student[:, 0, 1:], scale='linear')
+        stft_truth = stft(x[:, 0, 1:], scale='linear')
 
         loss_frame = criterion_frame(stft_student, stft_truth.detach())
 
@@ -252,7 +254,10 @@ def synthesize(model_t, model_s, ema=None):
             c_up = model_t.upsample(c)
 
             with torch.no_grad():
-                y_gen = model_s_ema.generate(z, c_up).squeeze()
+                if args.num_gpu == 1:
+                    y_gen = model_s_ema.generate(z, c_up).squeeze()
+                else:
+                    y_gen = model_s_ema.module.generate(z, c_up).squeeze()
             torch.cuda.synchronize()
             print('{} seconds'.format(time.time() - start_time))
             wav = y_gen.to(torch.device("cpu")).data.numpy()
@@ -297,7 +302,17 @@ def load_checkpoint(step, model_s, optimizer, ema=None):
         checkpoint = torch.load(checkpoint_path)
         averaged_model = build_student()
         averaged_model.to(device)
-        averaged_model.load_state_dict(checkpoint["state_dict"])
+        try:
+            averaged_model.load_state_dict(checkpoint["state_dict"])
+        except RuntimeError:
+            print("INFO: this model is trained with DataParallel. Creating new state_dict without module...")
+            state_dict = checkpoint["state_dict"]
+            from collections import OrderedDict
+            new_state_dict = OrderedDict()
+            for k, v in state_dict.items():
+                name = k[7:]  # remove `module.`
+                new_state_dict[name] = v
+            averaged_model.load_state_dict(new_state_dict)
         for name, param in averaged_model.named_parameters():
             if param.requires_grad:
                 ema.register(name, param.data)
@@ -316,11 +331,12 @@ path = os.path.join(args.load, args.teacher_name, "checkpoint_step{:09d}_ema.pth
 model_t = build_model()
 model_t = load_teacher_checkpoint(path, model_t)
 model_s = build_student()
-stft = STFT(filter_length=1024, hop_length=256)
 
 model_t.to(device)
 model_s.to(device)
-stft.to(device)
+if args.num_gpu > 1:
+    #model_t = torch.nn.DataParallel(model_t)
+    model_s = torch.nn.DataParallel(model_s)
 
 optimizer = optim.Adam(model_s.parameters(), lr=args.learning_rate)
 criterion_t = KL_Loss()

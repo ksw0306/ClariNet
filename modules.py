@@ -28,6 +28,9 @@ class Conv(nn.Module):
             out = out[:, :, :-self.padding]
         return out
 
+    def remove_weight_norm(self):
+        nn.utils.remove_weight_norm(self.conv)
+
 
 class ResBlock(nn.Module):
     def __init__(self, in_channels, out_channels, skip_channels, kernel_size, dilation,
@@ -72,6 +75,14 @@ class ResBlock(nn.Module):
         else:
             return (tensor[:, :, 1:] + res) * math.sqrt(0.5), skip
 
+    def remove_weight_norm(self):
+        self.filter_conv.remove_weight_norm()
+        self.gate_conv.remove_weight_norm()
+        nn.utils.remove_weight_norm(self.res_conv)
+        nn.utils.remove_weight_norm(self.skip_conv)
+        nn.utils.remove_weight_norm(self.filter_conv_c)
+        nn.utils.remove_weight_norm(self.gate_conv_c)
+
 
 class GaussianLoss(nn.Module):
     def __init__(self):
@@ -113,51 +124,15 @@ class ExponentialMovingAverage(object):
         self.shadow[name] = new_average.clone()
 
 
-# STFT code is adapted from: https://github.com/pseeth/pytorch-stft
-class STFT(torch.nn.Module):
-    def __init__(self, filter_length=1024, hop_length=256):
-        super(STFT, self).__init__()
+def stft(y, scale='linear'):
+    D = torch.stft(y, n_fft=1024, hop_length=256, win_length=1024)#, window=torch.hann_window(1024).cuda())
+    D = torch.sqrt(D.pow(2).sum(-1) + 1e-10)
+    # D = torch.sqrt(torch.clamp(D.pow(2).sum(-1), min=1e-10))
+    if scale == 'linear':
+        return D
+    elif scale == 'log':
+        S = 2 * torch.log(torch.clamp(D, 1e-10, float("inf")))
+        return S
+    else:
+        pass
 
-        self.filter_length = filter_length
-        self.hop_length = hop_length
-        self.forward_transform = None
-        scale = self.filter_length / self.hop_length
-        fourier_basis = np.fft.fft(np.eye(self.filter_length))
-
-        cutoff = int((self.filter_length / 2 + 1))
-        fourier_basis = np.vstack([np.real(fourier_basis[:cutoff, :]),
-                                   np.imag(fourier_basis[:cutoff, :])])
-        forward_basis = torch.tensor(fourier_basis[:, None, :])
-        inverse_basis = torch.tensor(np.linalg.pinv(scale * fourier_basis).T[:, None, :])
-
-        self.register_buffer('forward_basis', forward_basis.float())
-        self.register_buffer('inverse_basis', inverse_basis.float())
-
-    def forward(self, input_data):
-        num_batches, _, num_samples = input_data.size()
-
-        self.num_samples = num_samples
-
-        forward_transform = F.conv1d(input_data,
-                                     self.forward_basis,
-                                     stride=self.hop_length,
-                                     padding=self.filter_length)
-        cutoff = int((self.filter_length / 2) + 1)
-        real_part = forward_transform[:, :cutoff, :]
-        imag_part = forward_transform[:, cutoff:, :]
-
-        magnitude = torch.sqrt(real_part**2 + imag_part**2)
-        phase = torch.autograd.Variable(torch.atan2(imag_part.data, real_part.data))
-        return magnitude, phase
-
-    def inverse(self, magnitude, phase):
-        recombine_magnitude_phase = torch.cat([magnitude*torch.cos(phase),
-                                               magnitude*torch.sin(phase)], dim=1)
-
-        inverse_transform = F.conv_transpose1d(recombine_magnitude_phase,
-                                               self.inverse_basis,
-                                               stride=self.hop_length,
-                                               padding=0)
-        inverse_transform = inverse_transform[:, :, self.filter_length:]
-        inverse_transform = inverse_transform[:, :, :self.num_samples]
-        return inverse_transform

@@ -34,12 +34,12 @@ parser.add_argument('--batch_size', '-b', type=int, default=8, help='Batch size.
 parser.add_argument('--learning_rate', '-lr', type=float, default=0.001, help='The Learning Rate.')
 parser.add_argument('--ema_decay', type=float, default=0.9999, help='Exponential Moving Average Decay')
 
-parser.add_argument('--num_blocks', type=int, default=4, help='Number of blocks')
-parser.add_argument('--num_layers', type=int, default=6, help='Number of layers')
+parser.add_argument('--num_blocks', type=int, default=2, help='Number of blocks')
+parser.add_argument('--num_layers', type=int, default=10, help='Number of layers')
 parser.add_argument('--residual_channels', type=int, default=128, help='Residual Channels')
 parser.add_argument('--gate_channels', type=int, default=256, help='Gate Channels')
 parser.add_argument('--skip_channels', type=int, default=128, help='Skip Channels')
-parser.add_argument('--kernel_size', type=int, default=3, help='Kernel Size')
+parser.add_argument('--kernel_size', type=int, default=2, help='Kernel Size')
 parser.add_argument('--cin_channels', type=int, default=80, help='Cin Channels')
 parser.add_argument('--num_workers', type=int, default=2, help='Number of workers')
 

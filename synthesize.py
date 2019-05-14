@@ -25,17 +25,18 @@ parser.add_argument('--batch_size', '-b', type=int, default=1, help='Batch size.
 parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3, help='The Learning Rate.')
 parser.add_argument('--ema_decay', type=float, default=0.9999, help='Exponential Moving Average Decay')
 
-parser.add_argument('--num_blocks', type=int, default=4, help='Number of blocks')
-parser.add_argument('--num_layers', type=int, default=6, help='Number of layers')
+parser.add_argument('--num_blocks', type=int, default=2, help='Number of blocks')
+parser.add_argument('--num_layers', type=int, default=10, help='Number of layers')
 parser.add_argument('--residual_channels', type=int, default=128, help='Residual Channels')
 parser.add_argument('--gate_channels', type=int, default=256, help='Gate Channels')
 parser.add_argument('--skip_channels', type=int, default=128, help='Skip Channels')
-parser.add_argument('--kernel_size', type=int, default=3, help='Kernel Size')
+parser.add_argument('--kernel_size', type=int, default=2, help='Kernel Size')
 parser.add_argument('--cin_channels', type=int, default=80, help='Cin Channels')
 
 parser.add_argument('--num_samples', type=int, default=5, help='Number of Samples')
 
 parser.add_argument('--num_workers', type=int, default=1, help='Number of workers')
+parser.add_argument('--index', type=int, default=0, help='Index')
 
 
 args = parser.parse_args()
@@ -85,6 +86,7 @@ model = load_checkpoint(path, model)
 model.to(device)
 
 model.eval()
+
 for i, (x, y, c, _) in enumerate(test_loader):
     if i < args.num_samples:
         x, c = x.to(device), c.to(device)

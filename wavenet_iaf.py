@@ -5,8 +5,8 @@ from modules import Conv, ResBlock
 
 
 class Wavenet_Student(nn.Module):
-    def __init__(self, num_blocks_student=[1, 1, 1, 4], num_layers=6,
-                 front_channels=32, residual_channels=128, gate_channels=256, skip_channels=128,
+    def __init__(self, num_blocks_student=[1, 1, 1, 1, 1, 1], num_layers=10,
+                 front_channels=32, residual_channels=64, gate_channels=128, skip_channels=64,
                  kernel_size=3, cin_channels=80, causal=True):
         super(Wavenet_Student, self).__init__()
         self.num_blocks = num_blocks_student
@@ -46,9 +46,13 @@ class Wavenet_Student(nn.Module):
         x, _, _ = self.iaf(z, c_up)
         return x
 
+    def remove_weight_norm(self):
+        for iaf in self.iafs:
+            iaf.remove_weight_norm()
+
 
 class Wavenet_Flow(nn.Module):
-    def __init__(self, out_channels=1, num_blocks=4, num_layers=6,
+    def __init__(self, out_channels=1, num_blocks=1, num_layers=10,
                  front_channels=32, residual_channels=64, gate_channels=32, skip_channels=None,
                  kernel_size=3, cin_channels=80, causal=True):
         super(Wavenet_Flow, self). __init__()
@@ -73,7 +77,7 @@ class Wavenet_Flow(nn.Module):
         for b in range(self.num_blocks):
             for n in range(self.num_layers):
                 self.res_blocks.append(ResBlock(self.residual_channels, self.gate_channels, self.skip_channels,
-                                                self.kernel_size, dilation=self.kernel_size**n,
+                                                self.kernel_size, dilation=2**n,
                                                 cin_channels=self.cin_channels, local_conditioning=True,
                                                 causal=self.causal, mode='SAME'))
         self.final_conv = nn.Sequential(
@@ -99,3 +103,7 @@ class Wavenet_Flow(nn.Module):
         num_dir = 1 if self.causal else 2
         dilations = [2 ** (i % self.num_layers) for i in range(self.num_layers * self.num_blocks)]
         return num_dir * (self.kernel_size - 1) * sum(dilations) + 1 + (self.front_channels - 1)
+
+    def remove_weight_norm(self):
+        for f in self.res_blocks:
+            f.remove_weight_norm()

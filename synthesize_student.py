@@ -20,20 +20,20 @@ parser.add_argument('--loss', type=str, default='./loss', help='Folder to save l
 parser.add_argument('--log', type=str, default='./log', help='Log folder.')
 
 parser.add_argument('--teacher_name', type=str, default='wavenet_gaussian_01', help='Teacher Name')
-parser.add_argument('--model_name', type=str, default='wavenet_student_gaussian_01', help='Model Name')
+parser.add_argument('--model_name', type=str, default='clarinet_01', help='Model Name')
 parser.add_argument('--teacher_load_step', type=int, default=0, help='Teacher Load Step')
 parser.add_argument('--load_step', type=int, default=0, help='Student Load Step')
 
-parser.add_argument('--num_blocks_t', type=int, default=4, help='Number of blocks (Teacher)')
-parser.add_argument('--num_layers_t', type=int, default=6, help='Number of layers (Teacher)')
-parser.add_argument('--num_layers_s', type=int, default=6, help='Number of layers (Student)')
+parser.add_argument('--num_blocks_t', type=int, default=2, help='Number of blocks (Teacher)')
+parser.add_argument('--num_layers_t', type=int, default=10, help='Number of layers (Teacher)')
+parser.add_argument('--num_layers_s', type=int, default=10, help='Number of layers (Student)')
 parser.add_argument('--residual_channels', type=int, default=128, help='Residual Channels')
 parser.add_argument('--gate_channels', type=int, default=256, help='Gate Channels')
 parser.add_argument('--skip_channels', type=int, default=128, help='Skip Channels')
-parser.add_argument('--kernel_size', type=int, default=3, help='Kernel Size')
+parser.add_argument('--kernel_size', type=int, default=2, help='Kernel Size')
 parser.add_argument('--cin_channels', type=int, default=80, help='Cin Channels')
 
-parser.add_argument('--temp', type=float, default=0.7, help='Temperature')
+parser.add_argument('--temp', type=float, default=1.0, help='Temperature')
 parser.add_argument('--num_samples', type=int, default=10, help='Number of samples')
 
 parser.add_argument('--num_workers', type=int, default=1, help='Number of workers')
@@ -72,7 +72,7 @@ def build_model():
 
 
 def build_student():
-    model_s = Wavenet_Student(num_blocks_student=[1, 1, 1, 4],
+    model_s = Wavenet_Student(num_blocks_student=[1, 1, 1, 1, 1, 1],
                               num_layers=args.num_layers_s)
     return model_s
 
@@ -80,7 +80,17 @@ def build_student():
 def load_checkpoint(path, model):
     print("Load checkpoint from: {}".format(path))
     checkpoint = torch.load(path, map_location=lambda storage, loc: storage)
-    model.load_state_dict(checkpoint["state_dict"])
+    try:
+        model.load_state_dict(checkpoint["state_dict"])
+    except RuntimeError:
+        print("INFO: this model is trained with DataParallel. Creating new state_dict without module...")
+        state_dict = checkpoint["state_dict"]
+        from collections import OrderedDict
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            name = k[7:]  # remove `module.`
+            new_state_dict[name] = v
+        model.load_state_dict(new_state_dict)
     return model
 
 
@@ -97,10 +107,13 @@ model_s.to(device)
 
 model_t.eval()
 model_s.eval()
+print('remove_weight_norm')
+model_s.remove_weight_norm()
+
 for i, (x, y, c, l) in enumerate(test_loader):
     if i < args.num_samples:
         x, y, c = x.to(device), y.to(device), c.to(device)
-        c_up = model_t.upsample(c)
+        print(x.size())
         q_0 = Normal(x.new_zeros(x.size()), x.new_ones(x.size()))
         z = q_0.sample() * args.temp
 
@@ -114,6 +127,7 @@ for i, (x, y, c, l) in enumerate(test_loader):
         start_time = time.time()
 
         with torch.no_grad():
+            c_up = model_t.upsample(c)
             y_gen = model_s.generate(z, c_up).squeeze()
         torch.cuda.synchronize()
         print('{} seconds'.format(time.time() - start_time))
