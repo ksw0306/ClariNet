@@ -108,9 +108,9 @@ def clone_as_averaged_model(model_s, ema):
     if args.num_gpu > 1:
         averaged_model = torch.nn.DataParallel(averaged_model)
     averaged_model.load_state_dict(model_s.state_dict())
-    for name, param in averaged_model.named_parameters():
+    for name, _ in averaged_model.named_parameters():
         if name in ema.shadow:
-            param = ema.shadow[name].clone()
+            averaged_model.named_parameters()[name] = ema.shadow[name].clone()
     return averaged_model
 
 
